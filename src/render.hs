@@ -1,30 +1,37 @@
 import Data.Char(isSpace)
 import System.Environment(getArgs)
 import System.FilePath
-import System.Directory(createDirectoryIfMissing)
-
+import System.Directory
+import Control.Monad
 
 main :: IO ()
 main = do args <- getArgs
           case args of
-            [] -> putStrLn "PLease provide some files by dropping it on th executable"
-            xs -> mapM_ renderFile xs
+            [] -> putStrLn "Please provide some files by dropping it on th executable"
+            xs -> do is <- findImages (head xs)
+                     mapM_ (renderFile is) xs
 
-renderFile :: FilePath -> IO ()
-renderFile x =
+renderFile :: [String] -> FilePath -> IO ()
+renderFile is x =
   do let dir = takeDirectory x
          file = takeFileName x
          newFile = dir </> "html" </> replaceExtension file "html"
      putStrLn ("Converting " ++ show (dropExtension file) ++ " to html")
      txt <- readFile x
      createDirectoryIfMissing True (takeDirectory newFile)
-     writeFile newFile (doRender txt)
+     writeFile newFile (doRender is txt)
 
 replaceExt :: String -> FilePath -> FilePath
 replaceExt ext file = addExtension ext (dropExtension file) 
 
-doRender :: String -> String
-doRender = wrapHtml . songToHtml . map (map (lineToSyncs . addDash)) . parse
+findImages :: FilePath -> IO [String]
+findImages base = 
+  do let path = takeDirectory base </> "html" </> "images"
+     xs <- filterM (doesFileExist . (path </>))=<< getDirectoryContents path
+     return (map takeFileName xs)
+
+doRender :: [String] -> String -> String
+doRender is = wrapHtml is . songToHtml . map (map (lineToSyncs . addDash)) . parse
 
 type Para = [Line]
 type Line = [Part]
@@ -95,7 +102,7 @@ paraToHtml xs = "<div class=\"para\">" ++ concatMap lineToHtml xs ++ "</div>\n\n
 songToHtml = concatMap paraToHtml
 
 
-wrapHtml body = unlines
+wrapHtml imgs body = unlines
   [ "<!DOCTYPE HTML>"
   , "<html>"
   , "<head>"
@@ -103,6 +110,11 @@ wrapHtml body = unlines
   , "</head>"
   , "<body>"
   , body
+  , "<script>"
+  , "var imgs = " ++ show imgs
+  , "var pick = Math.floor(Math.random() * imgs.length)"
+  , "document.getElementsByTagName('body')[0].style.backgroundImage = 'url(images/' + imgs[pick] + ')'" 
+  , "</script>"
   , "</body>"
   , "</html>"
   ]
