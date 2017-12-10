@@ -3,35 +3,50 @@ import System.Environment(getArgs)
 import System.FilePath
 import System.Directory
 import Control.Monad
+import Data.List
 
 main :: IO ()
 main = do args <- getArgs
           case args of
             [] -> putStrLn "Please provide some files by dropping it on th executable"
             xs -> do is <- findImages (head xs)
-                     mapM_ (renderFile is) xs
+                     cs <- findChords (head xs)
+                     mapM_ (renderFile is cs) xs
 
-renderFile :: [String] -> FilePath -> IO ()
-renderFile is x =
+renderFile :: [String] -> [String] -> FilePath -> IO ()
+renderFile is cs x =
   do let dir = takeDirectory x
          file = takeFileName x
          newFile = dir </> "html" </> replaceExtension file "html"
      putStrLn ("Converting " ++ show (dropExtension file) ++ " to html")
      txt <- readFile x
      createDirectoryIfMissing True (takeDirectory newFile)
-     writeFile newFile (doRender is txt)
+     writeFile newFile (doRender is cs txt)
 
 replaceExt :: String -> FilePath -> FilePath
 replaceExt ext file = addExtension ext (dropExtension file) 
 
-findImages :: FilePath -> IO [String]
-findImages base = 
-  do let path = takeDirectory base </> "html" </> "images"
-     xs <- filterM (doesFileExist . (path </>))=<< getDirectoryContents path
-     return (map takeFileName xs)
 
-doRender :: [String] -> String -> String
-doRender is = wrapHtml is . songToHtml . map (map (lineToSyncs . addDash)) . parse
+findFileNames :: FilePath -> [String] -> IO [String]
+findFileNames base dirs =
+  do let path = foldr1 (</>) (takeDirectory base : dirs)
+     xs <- filterM (doesFileExist . (path </>))=<< getDirectoryContents path
+     return (m3ap takeFileName xs)
+
+
+findImages :: FilePath -> IO [String]
+findImages base = findFileNames base [ "html", "images"]
+  
+findChords :: FilePath -> IO [String]
+findChords base = findFileNames base ["html", "chords", "ukulele"]
+     
+     
+     
+doRender :: [String] -> [String] -> String -> String
+doRender is cs inp = wrapHtml $ randBg is $ addChords cs chords $ songToHtml $ map (map (lineToSyncs . addDash)) parsed
+  where parsed = parse inp
+        chords = sort $ nub [ c | a <- parsed, b <- a, Chord c <- b ] 
+
 
 type Para = [Line]
 type Line = [Part]
@@ -83,10 +98,11 @@ syncToHtml (Sync a b) = "<div class=\"sync\">" ++
                           "<div class=\"chord\">" ++ content b ++ "</div>"++
                           "<div class=\"lyrics\">" ++ content a ++ "</div>"++
                         "</div\n>"
-  where
-  content "" = "&nbsp;"
-  content xs = concatMap esc xs
-  esc c = case c of
+  
+content "" = "&nbsp;"
+content xs = concatMap esc xs
+
+esc c = case c of
             '<' -> "&lt;"
             '>' -> "&gt;"
             '&' -> "&amp;"
@@ -101,8 +117,20 @@ paraToHtml xs = "<div class=\"para\">" ++ concatMap lineToHtml xs ++ "</div>\n\n
 
 songToHtml = concatMap paraToHtml
 
+addChords chordImgs cs rest = "Chords: " ++ content (unwords cs) ++ "</br>" ++ rest
 
-wrapHtml imgs body = unlines
+
+
+randBg imgs xs = xs ++ unlines
+  [ "<script>"
+  , "var imgs = " ++ show imgs
+  , "var pick = Math.floor(Math.random() * imgs.length)"
+  , "document.getElementsByTagName('body')[0].style.backgroundImage = 'url(images/' + imgs[pick] + ')'" 
+  , "</script>"
+  ]
+
+
+wrapHtml body = unlines
   [ "<!DOCTYPE HTML>"
   , "<html>"
   , "<head>"
@@ -110,11 +138,6 @@ wrapHtml imgs body = unlines
   , "</head>"
   , "<body>"
   , body
-  , "<script>"
-  , "var imgs = " ++ show imgs
-  , "var pick = Math.floor(Math.random() * imgs.length)"
-  , "document.getElementsByTagName('body')[0].style.backgroundImage = 'url(images/' + imgs[pick] + ')'" 
-  , "</script>"
   , "</body>"
   , "</html>"
   ]
