@@ -4,6 +4,7 @@ import System.FilePath
 import System.Directory
 import Control.Monad
 import Data.List
+import Data.Function(on)
 
 main :: IO ()
 main = do args <- getArgs
@@ -117,9 +118,15 @@ paraToHtml xs = "<div class=\"para\">" ++ concatMap lineToHtml xs ++ "</div>\n\n
 
 songToHtml = concatMap paraToHtml
 
-addChords chordImgs cs rest = concatMap (drawChord chordImgs) cs ++ "</br>" ++ rest
+addChords chordImgs cs rest =
+  "<div class=\"allChords\">" ++
+    concatMap drawGroup grouped ++ "</div>" ++ rest
+  where
+  drawGroup xs = concatMap (drawChord chordImgs) xs ++ "<br/>"
+  ordered = sortBy (compare `on` head) cs
+  grouped = groupBy ((==) `on` head) ordered
 
-drawChord imgs c = "<div class=\"chordRef\">" ++ inner ++ "</div>"
+drawChord imgs c = "<div class=\"chordRef\"><div class=\"name\">" ++ c ++ "</div>" ++ inner ++ "</div>"
   where
   known = map dropExtension imgs
   
