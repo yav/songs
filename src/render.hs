@@ -31,14 +31,14 @@ findFileNames :: FilePath -> [String] -> IO [String]
 findFileNames base dirs =
   do let path = foldr1 (</>) (takeDirectory base : dirs)
      xs <- filterM (doesFileExist . (path </>))=<< getDirectoryContents path
-     return (m3ap takeFileName xs)
+     return (map takeFileName xs)
 
 
 findImages :: FilePath -> IO [String]
 findImages base = findFileNames base [ "html", "images"]
   
 findChords :: FilePath -> IO [String]
-findChords base = findFileNames base ["html", "chords", "ukulele"]
+findChords base = findFileNames base ["html", "images", "chords", "ukulele"]
      
      
      
@@ -117,10 +117,49 @@ paraToHtml xs = "<div class=\"para\">" ++ concatMap lineToHtml xs ++ "</div>\n\n
 
 songToHtml = concatMap paraToHtml
 
-addChords chordImgs cs rest = "Chords: " ++ content (unwords cs) ++ "</br>" ++ rest
+addChords chordImgs cs rest = concatMap (drawChord chordImgs) cs ++ "</br>" ++ rest
 
-
-
+drawChord imgs c = "<div class=\"chordRef\">" ++ inner ++ "</div>"
+  where
+  known = map dropExtension imgs
+  
+  inner
+    | Just d <- useChord known c' = "<img src=\"images/chords/ukulele/" ++ d ++ ".png\">&nbsp;"
+    | otherwise = "<span class=\"unknown chord\">" ++ content c ++ "</span>"
+    
+  c' = [if l == '\9837' then 'b' else l | l <- c ]
+  
+useChord known c  
+  | c `elem` known = Just c
+  | Just a <- chordApprox c = useChord known a
+  | otherwise = Nothing  
+  
+chordApprox :: String -> Maybe String
+chordApprox a
+  | (as,_:_) <- break (== '/') a = Just as
+  | 'G' : '#' : y <- a = Just ("Ab" ++ y)
+  | '(' : (xs@(_:_)) <- a = Just (init xs)
+  | x : '#' : y <- a = Just (succ x : 'b' : y) 
+  | otherwise =
+  msum [
+    remap "dim7" "dim",
+    remap "6sus4" "6" ,
+    remap "sus4" "aug" ,
+    remap "b5"   "" ,
+    remap "#5"   "" ,
+    remap "maj9" "" ,
+    remap "sus2" "" ,
+    remap "13"   "" ,
+    remap "b9"   "" ,
+    remap "#11"  "" 
+  ]
+  where
+  remap x y = if x `isSuffixOf` a
+                then Just (take (length a - length x) a ++ y)
+                else Nothing
+  
+  
+  
 randBg imgs xs = xs ++ unlines
   [ "<script>"
   , "var imgs = " ++ show imgs
