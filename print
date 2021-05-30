@@ -1,0 +1,2 @@
+#!/bin/bash
+a2ps --portrait --columns=1 "$1"
