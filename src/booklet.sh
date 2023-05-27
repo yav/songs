@@ -12,12 +12,13 @@ WORK=$(mktemp -d booklet.XXXXXXXX)
 NAME="booklet"
 DIR=$1
 for FILE in $DIR/*.txt; do
-  SONG="$(basename -s $FILE .txt)"
+  SONG="$(basename "$FILE" .txt)"
   ROOT="$WORK/$SONG"
   a2ps --margin=0 --borders 0 -1 -R -B "$FILE" -o "$ROOT.ps"
   ps2pdf "$ROOT.ps" "$ROOT.pdf"
   rm "$ROOT.ps"
 done
+
 pdfunite $WORK/*.pdf "$DIR/$NAME.pdf"
 pdfbook2 "$DIR/$NAME.pdf"
 mv "$DIR/$NAME-book.pdf" "$DIR/$NAME.pdf"
